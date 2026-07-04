@@ -1,0 +1,113 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String            @id @default(cuid())
+  email        String            @unique
+  passwordHash String            @map("password_hash")
+  name         String
+  createdAt    DateTime          @default(now()) @map("created_at")
+  members      WorkspaceMember[]
+  ownedProjects Project[]        @relation("ProjectOwner")
+
+  @@map("users")
+}
+
+model Workspace {
+  id        String            @id @default(cuid())
+  name      String
+  slug      String            @unique
+  createdAt DateTime          @default(now()) @map("created_at")
+  members   WorkspaceMember[]
+  projects  Project[]
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String    @id @default(cuid())
+  workspaceId String    @map("workspace_id")
+  userId      String    @map("user_id")
+  role        String    @default("member")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+model Project {
+  id          String           @id
+  name        String
+  data        Json
+  workspaceId String?          @map("workspace_id")
+  ownerId     String?          @map("owner_id")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  workspace   Workspace?       @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  owner       User?            @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  versions    ProjectVersion[]
+  shareLinks  ShareLink[]
+  presence    ProjectPresence[]
+  collabUpdates CollabUpdate[]
+
+  @@index([workspaceId])
+  @@map("projects")
+}
+
+model CollabUpdate {
+  id        String   @id @default(cuid())
+  projectId String   @map("project_id")
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  update    Bytes
+  sessionId String   @map("session_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([projectId, createdAt])
+  @@map("collab_updates")
+}
+
+model ShareLink {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  projectId String    @map("project_id")
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  mode      String    @default("view")
+  expiresAt DateTime? @map("expires_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([token])
+  @@map("share_links")
+}
+
+model ProjectPresence {
+  id        String   @id @default(cuid())
+  projectId String   @map("project_id")
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sessionId String   @map("session_id")
+  userName  String   @map("user_name")
+  color     String   @default("#ffffff")
+  lastSeen  DateTime @updatedAt @map("last_seen")
+
+  @@unique([projectId, sessionId])
+  @@index([projectId, lastSeen])
+  @@map("project_presence")
+}
+
+model ProjectVersion {
+  id        String   @id @default(cuid())
+  projectId String   @map("project_id")
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  label     String
+  data      Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([projectId, createdAt])
+  @@map("project_versions")
+}
